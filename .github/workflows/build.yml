@@ -1,0 +1,53 @@
+name: Build APK
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Prepare pixel icons
+        run: |
+          mkdir -p app/src/main/res/drawable-nodpi
+          shopt -s nullglob
+          for z in icons*.zip; do unzip -o "$z" -d app/src/main/res/drawable-nodpi; done
+          pip install pillow
+          python3 - <<'EOF'
+          import glob
+          from PIL import Image
+          names = "discord reddit twitter snapchat whatsapp twitch youtube facebook instagram chrome google playstore tiktok gmail docs evernote word excel powerpoint onenote outlook firefox edge opera steam todoist android files".split()
+          sheets = sorted(glob.glob("icons-sheet*.png"))
+          print("sheets:", sheets)
+          im = Image.open(sheets[0]).convert("RGBA")
+          cw, ch = im.width // 7, im.height // 4
+          for i, n in enumerate(names):
+              x, y = (i % 7) * cw, (i // 7) * ch
+              c = im.crop((x, y, x + cw, y + ch)).resize((192, 192), Image.NEAREST)
+              c.save("app/src/main/res/drawable-nodpi/pix_%s.png" % n)
+          EOF
+          ls app/src/main/res/drawable-nodpi
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.10.2
+
+      - name: Build debug APK
+        run: gradle assembleDebug --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: IconChanger-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
